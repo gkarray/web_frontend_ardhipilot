@@ -11,6 +11,7 @@ export interface RegisterRequest {
   email?: string;
   phone?: string;
   password: string;
+  main_connection_method: 'email' | 'phone';
 }
 
 export interface OTPVerifyRequest {

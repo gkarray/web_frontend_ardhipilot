@@ -54,8 +54,8 @@ export function SignUpPage() {
         registerUser({
           first_name: firstName,
           last_name: lastName,
-          email: connectionMethod === 'email' ? email : undefined,
-          phone: connectionMethod === 'phone' ? phone : undefined,
+          email: email || undefined,
+          phone: phone || undefined,
           password,
           main_connection_method: connectionMethod,
         })

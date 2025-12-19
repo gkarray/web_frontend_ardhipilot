@@ -1,4 +1,5 @@
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../../app/store';
 import { loginUser, selectAuth, clearError } from '../authSlice';
@@ -68,11 +69,10 @@ export function SignInPage() {
                       setConnectionMethod('email');
                       setEmailOrPhone('');
                     }}
-                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
-                      connectionMethod === 'email'
+                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${connectionMethod === 'email'
                         ? 'bg-[#14B8A6] text-white'
                         : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
-                    }`}
+                      }`}
                   >
                     Email
                   </button>
@@ -82,11 +82,10 @@ export function SignInPage() {
                       setConnectionMethod('phone');
                       setEmailOrPhone('');
                     }}
-                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-l border-[#E5E7EB] ${
-                      connectionMethod === 'phone'
+                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-l border-[#E5E7EB] ${connectionMethod === 'phone'
                         ? 'bg-[#14B8A6] text-white'
                         : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
-                    }`}
+                      }`}
                   >
                     Phone
                   </button>

@@ -22,28 +22,64 @@ const initialState: AuthState = {
 // Async thunks
 export const loginUser = createAsyncThunk(
   'auth/login',
-  async ({ emailOrPhone, password }: { emailOrPhone: string; password: string }) => {
-    const response = await login(emailOrPhone, password);
-    localStorage.setItem('auth_token', response.access_token);
-    const user = await getCurrentUser();
-    return { token: response.access_token, user };
+  async ({ emailOrPhone, password }: { emailOrPhone: string; password: string }, { rejectWithValue }) => {
+    try {
+      const response = await login(emailOrPhone, password);
+      localStorage.setItem('auth_token', response.access_token);
+      const user = await getCurrentUser();
+      return { token: response.access_token, user };
+    } catch (error) {
+      // Extract error message from API response
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const detail = axiosError.response?.data?.detail;
+        if (detail) {
+          return rejectWithValue(detail);
+        }
+      }
+      return rejectWithValue('Login failed');
+    }
   }
 );
 
 export const registerUser = createAsyncThunk(
   'auth/register',
-  async (userData: Parameters<typeof register>[0]) => {
-    return await register(userData);
+  async (userData: Parameters<typeof register>[0], { rejectWithValue }) => {
+    try {
+      return await register(userData);
+    } catch (error) {
+      // Extract error message from API response
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const detail = axiosError.response?.data?.detail;
+        if (detail) {
+          return rejectWithValue(detail);
+        }
+      }
+      return rejectWithValue('Registration failed');
+    }
   }
 );
 
 export const verifyOtpUser = createAsyncThunk(
   'auth/verifyOtp',
-  async ({ userId, code }: { userId: string; code: string }) => {
-    const response = await verifyOtp(userId, code);
-    localStorage.setItem('auth_token', response.access_token);
-    const user = await getCurrentUser();
-    return { token: response.access_token, user };
+  async ({ userId, code }: { userId: string; code: string }, { rejectWithValue }) => {
+    try {
+      const response = await verifyOtp(userId, code);
+      localStorage.setItem('auth_token', response.access_token);
+      const user = await getCurrentUser();
+      return { token: response.access_token, user };
+    } catch (error) {
+      // Extract error message from API response
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const detail = axiosError.response?.data?.detail;
+        if (detail) {
+          return rejectWithValue(detail);
+        }
+      }
+      return rejectWithValue('OTP verification failed');
+    }
   }
 );
 
@@ -79,7 +115,7 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Login failed';
+        state.error = (action.payload as string) || action.error.message || 'Login failed';
         state.isAuthenticated = false;
       });
 
@@ -95,7 +131,7 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Registration failed';
+        state.error = (action.payload as string) || action.error.message || 'Registration failed';
       });
 
     // Verify OTP
@@ -113,7 +149,7 @@ const authSlice = createSlice({
       })
       .addCase(verifyOtpUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'OTP verification failed';
+        state.error = (action.payload as string) || action.error.message || 'OTP verification failed';
       });
 
     // Fetch current user

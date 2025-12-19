@@ -2,10 +2,12 @@ import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 import type { TypedUseSelectorHook } from 'react-redux';
 import authReducer from '../features/auth/authSlice';
+import fieldPlotReducer from '../features/fieldPlots/fieldPlotSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
+    fieldPlots: fieldPlotReducer,
   },
 });
 

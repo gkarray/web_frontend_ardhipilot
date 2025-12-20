@@ -7,6 +7,7 @@ interface FieldPlotState {
   plots: FieldPlot[];
   selectedPlotId: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
 }
 
@@ -14,6 +15,7 @@ const initialState: FieldPlotState = {
   plots: [],
   selectedPlotId: null,
   isLoading: false,
+  isInitialized: false,
   error: null,
 };
 
@@ -67,11 +69,13 @@ const fieldPlotSlice = createSlice({
       })
       .addCase(fetchPlots.fulfilled, (state, action) => {
         state.isLoading = false;
+        state.isInitialized = true;
         state.plots = action.payload;
         state.error = null;
       })
       .addCase(fetchPlots.rejected, (state, action) => {
         state.isLoading = false;
+        state.isInitialized = true;
         state.error = action.error.message || 'Failed to fetch plots';
       });
 
@@ -142,6 +146,7 @@ export const selectSelectedPlot = (state: RootState) => {
   return state.fieldPlots.plots.find((p) => p.id === state.fieldPlots.selectedPlotId) || null;
 };
 export const selectIsLoading = (state: RootState) => state.fieldPlots.isLoading;
+export const selectIsInitialized = (state: RootState) => state.fieldPlots.isInitialized;
 export const selectError = (state: RootState) => state.fieldPlots.error;
 export const selectHasPlots = (state: RootState) => state.fieldPlots.plots.length > 0;
 

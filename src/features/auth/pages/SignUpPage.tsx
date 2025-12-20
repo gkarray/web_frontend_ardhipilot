@@ -54,8 +54,8 @@ export function SignUpPage() {
         registerUser({
           first_name: firstName,
           last_name: lastName,
-          email: email || undefined,
-          phone: phone || undefined,
+          email: connectionMethod === 'email' ? email : undefined,
+          phone: connectionMethod === 'phone' ? phone : undefined,
           password,
           main_connection_method: connectionMethod,
         })
@@ -180,9 +180,8 @@ export function SignUpPage() {
                     name="first-name"
                     type="text"
                     required
-                    className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${
-                      firstNameError ? 'border-red-300' : 'border-[#E5E7EB]'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${firstNameError ? 'border-red-300' : 'border-[#E5E7EB]'
+                      }`}
                     placeholder="First Name"
                     value={firstName}
                     onChange={(e) => handleFirstNameChange(e.target.value)}
@@ -202,9 +201,8 @@ export function SignUpPage() {
                     name="last-name"
                     type="text"
                     required
-                    className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${
-                      lastNameError ? 'border-red-300' : 'border-[#E5E7EB]'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${lastNameError ? 'border-red-300' : 'border-[#E5E7EB]'
+                      }`}
                     placeholder="Last Name"
                     value={lastName}
                     onChange={(e) => handleLastNameChange(e.target.value)}
@@ -227,11 +225,10 @@ export function SignUpPage() {
                       setEmailError('');
                       setTouched({ ...touched, email: false });
                     }}
-                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
-                      connectionMethod === 'email'
+                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${connectionMethod === 'email'
                         ? 'bg-[#14B8A6] text-white'
                         : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
-                    }`}
+                      }`}
                   >
                     Email
                   </button>
@@ -243,11 +240,10 @@ export function SignUpPage() {
                       setPhoneError('');
                       setTouched({ ...touched, phone: false });
                     }}
-                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-l border-[#E5E7EB] ${
-                      connectionMethod === 'phone'
+                    className={`flex-1 py-2 px-4 text-sm font-medium transition-colors border-l border-[#E5E7EB] ${connectionMethod === 'phone'
                         ? 'bg-[#14B8A6] text-white'
                         : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'
-                    }`}
+                      }`}
                   >
                     Phone
                   </button>
@@ -265,9 +261,8 @@ export function SignUpPage() {
                   name="email"
                   type="email"
                   required={connectionMethod === 'email'}
-                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${
-                    emailError ? 'border-red-300' : 'border-[#E5E7EB]'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${emailError ? 'border-red-300' : 'border-[#E5E7EB]'
+                    }`}
                   placeholder="Email address"
                   value={email}
                   onChange={(e) => handleEmailChange(e.target.value)}
@@ -289,9 +284,8 @@ export function SignUpPage() {
                   name="phone"
                   type="tel"
                   required={connectionMethod === 'phone'}
-                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${
-                    phoneError ? 'border-red-300' : 'border-[#E5E7EB]'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${phoneError ? 'border-red-300' : 'border-[#E5E7EB]'
+                    }`}
                   placeholder="Phone number"
                   value={phone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
@@ -330,9 +324,8 @@ export function SignUpPage() {
                   name="repeat-password"
                   type="password"
                   required
-                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${
-                    passwordMatchError ? 'border-red-300' : 'border-[#E5E7EB]'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent text-sm ${passwordMatchError ? 'border-red-300' : 'border-[#E5E7EB]'
+                    }`}
                   placeholder="Repeat Password"
                   value={repeatPassword}
                   onChange={(e) => handleRepeatPasswordChange(e.target.value)}

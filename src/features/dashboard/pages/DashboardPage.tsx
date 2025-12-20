@@ -9,12 +9,19 @@ import {
   selectSelectedPlot,
   selectHasPlots,
   selectPlot,
-  selectIsLoading,
+  selectIsInitialized,
+  updatePlot,
 } from '../../fieldPlots/fieldPlotSlice';
 import { Logo } from '../../../components/Logo';
 import { MapboxMap } from '../../../components/MapboxMap';
 import { PlotList } from '../../../components/PlotList';
-import type { FieldPlot } from '../../../api/fieldPlots';
+import { CropTypeModal } from '../../../components/CropTypeModal';
+import { FertigationModal } from '../components/FertigationModal';
+import { getFertigationEvents } from '../../../api/fieldPlots';
+import type { FieldPlot, FertigationEvent } from '../../../api/fieldPlots';
+import { DatePickerModal } from '../../../components/DatePickerModal';
+
+const DAYS_TO_SHOW = 7;
 
 export function DashboardPage() {
   const dispatch = useAppDispatch();
@@ -23,14 +30,76 @@ export function DashboardPage() {
   const plots = useAppSelector(selectPlots);
   const selectedPlot = useAppSelector(selectSelectedPlot);
   const hasPlots = useAppSelector(selectHasPlots);
-  const isLoadingPlots = useAppSelector(selectIsLoading);
+  const isInitialized = useAppSelector(selectIsInitialized);
 
   // Drawing / Creation State
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [plotName, setPlotName] = useState('');
   const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
   const [plotCreationError, setPlotCreationError] = useState<string | null>(null);
+
   const [isCreating, setIsCreating] = useState(false);
+  const [isCropTypeModalOpen, setIsCropTypeModalOpen] = useState(false);
+
+  // Fertigation State
+  const [isFertigationModalOpen, setIsFertigationModalOpen] = useState(false);
+  const [lastFertigationEvent, setLastFertigationEvent] = useState<FertigationEvent | null>(null);
+
+  // Date State
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewDate, setViewDate] = useState(new Date()); // The date that anchors the week view
+  const [isDatePickerModalOpen, setIsDatePickerModalOpen] = useState(false);
+
+  const getWeekDates = (anchorDate: Date) => {
+    const dates = [];
+    for (let i = DAYS_TO_SHOW - 1; i >= 0; i--) {
+      const d = new Date(anchorDate);
+      d.setDate(d.getDate() - i);
+      dates.push(d);
+    }
+    return dates;
+  };
+
+  const handlePrevWeek = () => {
+    const newViewDate = new Date(viewDate);
+    newViewDate.setDate(newViewDate.getDate() - 7);
+    setViewDate(newViewDate);
+  };
+
+  const handleNextWeek = () => {
+    const newViewDate = new Date(viewDate);
+    newViewDate.setDate(newViewDate.getDate() + 7);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // If future dates are not allowed, don't go past today
+    if (newViewDate > today) {
+      setViewDate(today);
+    } else {
+      setViewDate(newViewDate);
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    const day = date.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    return `${day} ${month}`;
+  };
+
+  const isSameDay = (d1: Date, d2: Date) => {
+    return d1.getDate() === d2.getDate() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getFullYear() === d2.getFullYear();
+  };
+
+  const isFutureDate = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate > today;
+  };
 
   useEffect(() => {
     if (!user) {
@@ -44,12 +113,12 @@ export function DashboardPage() {
     }
   }, [dispatch, user]);
 
-  // Enter drawing mode if user has no plots
+  // Enter drawing mode if user has no plots - only after we've confirmed they have none
   useEffect(() => {
-    if (user && !isLoadingPlots && !hasPlots) {
+    if (user && isInitialized && !hasPlots) {
       setIsDrawingMode(true);
     }
-  }, [user, isLoadingPlots, hasPlots]);
+  }, [user, isInitialized, hasPlots]);
 
   const handleSignOut = async () => {
     await dispatch(logoutUser()).unwrap();
@@ -120,11 +189,34 @@ export function DashboardPage() {
     }
   };
 
+  const handleCropTypeSubmit = async (cropType: string) => {
+    if (!selectedPlot) return;
+    await dispatch(updatePlot({ id: selectedPlot.id, data: { crop_type: cropType } })).unwrap();
+  };
+
   const handlePlotSelect = (plot: FieldPlot) => {
     dispatch(selectPlot(plot.id));
   };
 
-  const isFeatureDisabled = !hasPlots;
+  // Fetch fertigation summary when plot changes or modal closes
+  useEffect(() => {
+    if (selectedPlot) {
+      getFertigationEvents(selectedPlot.id)
+        .then(events => {
+          if (events.length > 0) {
+            // Events are already ordered by date desc from backend
+            setLastFertigationEvent(events[0]);
+          } else {
+            setLastFertigationEvent(null);
+          }
+        })
+        .catch(err => console.error(err));
+    } else {
+      setLastFertigationEvent(null);
+    }
+  }, [selectedPlot, isFertigationModalOpen]);
+
+  const isFeatureDisabled = !selectedPlot;
 
   return (
     <div className="h-screen w-screen bg-[#F5F5F5] flex flex-col overflow-hidden">
@@ -163,7 +255,10 @@ export function DashboardPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-[#1F2937]">VEGETATION INDEX</h3>
-                <button className="w-4 h-4 flex items-center justify-center text-[#6B7280] hover:text-[#1F2937]">
+                <button
+                  disabled={isFeatureDisabled}
+                  className={`w-4 h-4 flex items-center justify-center text-[#6B7280] ${isFeatureDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-[#1F2937]'}`}
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -194,32 +289,35 @@ export function DashboardPage() {
             </div>
 
             {/* Irrigation Index */}
-            <div>
+            <div className="opacity-50 cursor-not-allowed">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-[#1F2937]">IRRIGATION INDEX</h3>
-                <button className="w-4 h-4 flex items-center justify-center text-[#6B7280] hover:text-[#1F2937]">
+                <button
+                  disabled={true}
+                  className="w-4 h-4 flex items-center justify-center text-[#6B7280] cursor-not-allowed"
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
-                  <div className="w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#14B8A6] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#14B8A6]"></div>
+                <label className="relative inline-flex items-center cursor-not-allowed">
+                  <input type="checkbox" className="sr-only peer" disabled={true} />
+                  <div className="w-11 h-6 bg-[#E5E7EB] rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                 </label>
                 <div className="flex gap-1">
                   <button
-                    disabled={isFeatureDisabled}
-                    className={`px-2 py-1 text-xs rounded ${isFeatureDisabled ? 'bg-[#14B8A6] text-white opacity-50 cursor-not-allowed' : 'bg-[#14B8A6] text-white'}`}
-                    title={isFeatureDisabled ? 'Register a field plot to use this feature' : ''}
+                    disabled={true}
+                    className="px-2 py-1 text-xs rounded bg-[#14B8A6] text-white opacity-50 cursor-not-allowed"
+                    title="Feature not yet available"
                   >
                     NIR
                   </button>
                   <button
-                    disabled={isFeatureDisabled}
-                    className={`px-2 py-1 text-xs rounded ${isFeatureDisabled ? 'bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed' : 'bg-[#F5F5F5] text-[#6B7280]'}`}
-                    title={isFeatureDisabled ? 'Register a field plot to use this feature' : ''}
+                    disabled={true}
+                    className="px-2 py-1 text-xs rounded bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed"
+                    title="Feature not yet available"
                   >
                     SWIR 1
                   </button>
@@ -228,32 +326,35 @@ export function DashboardPage() {
             </div>
 
             {/* Plant Health */}
-            <div>
+            <div className="opacity-50 cursor-not-allowed">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-[#1F2937]">PLANT HEALTH</h3>
-                <button className="w-4 h-4 flex items-center justify-center text-[#6B7280] hover:text-[#1F2937]">
+                <button
+                  disabled={true}
+                  className="w-4 h-4 flex items-center justify-center text-[#6B7280] cursor-not-allowed"
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
-                  <div className="w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#14B8A6] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#14B8A6]"></div>
+                <label className="relative inline-flex items-center cursor-not-allowed">
+                  <input type="checkbox" className="sr-only peer" disabled={true} />
+                  <div className="w-11 h-6 bg-[#E5E7EB] rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                 </label>
                 <div className="flex gap-1">
                   <button
-                    disabled={isFeatureDisabled}
-                    className={`px-2 py-1 text-xs rounded ${isFeatureDisabled ? 'bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed' : 'bg-[#F5F5F5] text-[#6B7280]'}`}
-                    title={isFeatureDisabled ? 'Register a field plot to use this feature' : ''}
+                    disabled={true}
+                    className="px-2 py-1 text-xs rounded bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed"
+                    title="Feature not yet available"
                   >
                     NIR
                   </button>
                   <button
-                    disabled={isFeatureDisabled}
-                    className={`px-2 py-1 text-xs rounded ${isFeatureDisabled ? 'bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed' : 'bg-[#F5F5F5] text-[#6B7280]'}`}
-                    title={isFeatureDisabled ? 'Register a field plot to use this feature' : ''}
+                    disabled={true}
+                    className="px-2 py-1 text-xs rounded bg-[#F5F5F5] text-[#6B7280] opacity-50 cursor-not-allowed"
+                    title="Feature not yet available"
                   >
                     RE
                   </button>
@@ -262,34 +363,40 @@ export function DashboardPage() {
             </div>
 
             {/* Yield Forecast */}
-            <div>
+            <div className="opacity-50 cursor-not-allowed">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-[#1F2937]">YIELD FORECAST</h3>
-                <button className="w-4 h-4 flex items-center justify-center text-[#6B7280] hover:text-[#1F2937]">
+                <button
+                  disabled={true}
+                  className="w-4 h-4 flex items-center justify-center text-[#6B7280] cursor-not-allowed"
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
               </div>
-              <label className={`relative inline-flex items-center ${isFeatureDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
-                <input type="checkbox" className="sr-only peer" disabled={isFeatureDisabled} />
-                <div className={`w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#14B8A6] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#14B8A6] ${isFeatureDisabled ? 'opacity-50' : ''}`}></div>
+              <label className="relative inline-flex items-center cursor-not-allowed">
+                <input type="checkbox" className="sr-only peer" disabled={true} />
+                <div className="w-11 h-6 bg-[#E5E7EB] rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
               </label>
             </div>
 
             {/* Water Saved */}
-            <div>
+            <div className="opacity-50 cursor-not-allowed">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-[#1F2937]">WATER SAVED</h3>
-                <button className="w-4 h-4 flex items-center justify-center text-[#6B7280] hover:text-[#1F2937]">
+                <button
+                  disabled={true}
+                  className="w-4 h-4 flex items-center justify-center text-[#6B7280] cursor-not-allowed"
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
               </div>
-              <label className={`relative inline-flex items-center ${isFeatureDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
-                <input type="checkbox" className="sr-only peer" disabled={isFeatureDisabled} />
-                <div className={`w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#14B8A6] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#14B8A6] ${isFeatureDisabled ? 'opacity-50' : ''}`}></div>
+              <label className="relative inline-flex items-center cursor-not-allowed">
+                <input type="checkbox" className="sr-only peer" disabled={true} />
+                <div className="w-11 h-6 bg-[#E5E7EB] rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
               </label>
             </div>
           </div>
@@ -388,8 +495,8 @@ export function DashboardPage() {
           <button
             disabled={isFeatureDisabled && !isDrawingMode}
             className={`absolute bottom-4 right-4 bg-white px-3 py-2 rounded-md text-sm text-[#1F2937] shadow-md ${(isFeatureDisabled && !isDrawingMode)
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-[#F5F5F5]'
+              ? 'opacity-50 cursor-not-allowed'
+              : 'hover:bg-[#F5F5F5]'
               }`}
             title={isFeatureDisabled ? 'Register a field plot to use this feature' : ''}
           >
@@ -484,32 +591,55 @@ export function DashboardPage() {
       </div>
 
       {/* Bottom Date Selector */}
-      <div className="bg-white border-t border-[#E5E7EB] px-4 py-3 flex items-center gap-2 overflow-x-auto">
-        <button className="p-2 hover:bg-[#F5F5F5] rounded-md transition-colors">
+      <div className={`bg-white border-t border-[#E5E7EB] px-4 py-3 flex items-center gap-2 overflow-x-auto ${isFeatureDisabled ? 'opacity-50' : ''}`}>
+        <button
+          onClick={handlePrevWeek}
+          disabled={isFeatureDisabled}
+          className={`p-2 rounded-md transition-colors ${isFeatureDisabled ? 'cursor-not-allowed' : 'hover:bg-[#F5F5F5]'}`}
+        >
           <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        {['16 Feb', '17 Feb', '18 Feb', '19 Feb', '20 Feb', '21 Feb'].map((date, index) => (
-          <button
-            key={date}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${index === 2
-                ? 'bg-[#10B981] text-white'
-                : 'bg-white text-[#1F2937] hover:bg-[#F5F5F5]'
-              }`}
-          >
-            {date} '25
-          </button>
-        ))}
+        {getWeekDates(viewDate).map((date) => {
+          const isFuture = isFutureDate(date);
+          const isSelected = isSameDay(date, selectedDate);
 
-        <button className="p-2 hover:bg-[#F5F5F5] rounded-md transition-colors">
+          if (isFuture) return null; // Future dates not visible
+
+          return (
+            <button
+              key={date.toISOString()}
+              onClick={() => setSelectedDate(date)}
+              disabled={isFeatureDisabled}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${isFeatureDisabled
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : isSelected
+                  ? 'bg-[#10B981] text-white'
+                  : 'bg-white text-[#1F2937] hover:bg-[#F5F5F5]'
+                }`}
+            >
+              {formatDate(date)} '{date.getFullYear().toString().slice(-2)}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={handleNextWeek}
+          disabled={isFeatureDisabled || isSameDay(viewDate, new Date())}
+          className={`p-2 rounded-md transition-colors ${isFeatureDisabled || isSameDay(viewDate, new Date()) ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#F5F5F5]'}`}
+        >
           <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
 
-        <button className="p-2 hover:bg-[#F5F5F5] rounded-md transition-colors ml-auto">
+        <button
+          onClick={() => setIsDatePickerModalOpen(true)}
+          disabled={isFeatureDisabled}
+          className={`p-2 rounded-md transition-colors ml-auto ${isFeatureDisabled ? 'cursor-not-allowed' : 'hover:bg-[#F5F5F5]'}`}
+        >
           <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -517,38 +647,83 @@ export function DashboardPage() {
       </div>
 
       {/* Bottom Feature Cards */}
-      <div className="bg-[#F5F5F5] px-4 py-4 border-t border-[#E5E7EB] overflow-x-auto hidden lg:block">
+      <div className={`bg-[#F5F5F5] px-4 py-4 border-t border-[#E5E7EB] overflow-x-auto hidden lg:block ${isFeatureDisabled ? 'opacity-50' : ''}`}>
         <div className="flex gap-4">
           {/* Crop Type */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB]">
+          <div className={`relative group bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB] ${isFeatureDisabled ? 'cursor-not-allowed' : ''}`}>
             <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Crop Type</h3>
-            <p className="text-xs text-[#6B7280] mb-2">Choose your main crop</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
-          </div>
-
-          {/* Crop Cycle */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB]">
-            <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Crop Cycle</h3>
-            <p className="text-xs text-[#6B7280] mb-2">Check the stage of your crop</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <p className="text-xs text-[#6B7280] mb-2">
+              {selectedPlot?.crop_type ? (
+                <span className="font-medium text-[#111827]">{selectedPlot.crop_type}</span>
+              ) : (
+                'Choose your main crop'
+              )}
+            </p>
+            <button
+              onClick={() => setIsCropTypeModalOpen(true)}
+              disabled={isFeatureDisabled}
+              className={`text-[#14B8A6] text-xs font-medium flex items-center gap-1 transition-colors ${isFeatureDisabled ? 'cursor-not-allowed' : 'hover:text-[#0D9488]'}`}
+            >
+              {selectedPlot?.crop_type ? (
+                <>
+                  <span>Modify</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </>
+              ) : (
+                'enter crop type →'
+              )}
+            </button>
           </div>
 
           {/* Fertigation */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB]">
+          <div className={`bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB] ${isFeatureDisabled ? 'cursor-not-allowed' : ''}`}>
             <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Fertigation</h3>
-            <p className="text-xs text-[#6B7280] mb-2">Optimize your fertilizer and nutrient needs</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <p className="text-xs text-[#6B7280] mb-2">
+              {lastFertigationEvent ? (
+                <span className="font-medium text-[#111827]">
+                  Last: {new Date(lastFertigationEvent.date).toLocaleDateString()} - {lastFertigationEvent.fertilizer_name}
+                </span>
+              ) : (
+                'Optimize your fertilizer and nutrient needs'
+              )}
+            </p>
+            <button
+              disabled={isFeatureDisabled}
+              onClick={() => setIsFertigationModalOpen(true)}
+              className={`text-[#14B8A6] text-xs ${isFeatureDisabled ? 'cursor-not-allowed' : 'hover:text-[#0D9488]'}`}
+            >
+              {lastFertigationEvent ? 'View Log →' : 'Log fertigation event →'}
+            </button>
+          </div>
+
+          {/* Crop Cycle */}
+          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB] cursor-not-allowed opacity-50">
+            <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Crop Cycle</h3>
+            <p className="text-xs text-[#6B7280] mb-2">Check the stage of your crop</p>
+            <button
+              disabled={true}
+              className="text-[#14B8A6] text-xs cursor-not-allowed"
+            >
+              Learn more →
+            </button>
           </div>
 
           {/* Irrigation */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB]">
+          <div className="bg-white rounded-lg p-4 min-w-[200px] border border-[#E5E7EB] cursor-not-allowed opacity-50">
             <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Irrigation</h3>
             <p className="text-xs text-[#6B7280] mb-2">Optimize your water needs</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <button
+              disabled={true}
+              className="text-[#14B8A6] text-xs cursor-not-allowed"
+            >
+              Learn more →
+            </button>
           </div>
 
           {/* Diseases (Premium) */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-dashed border-[#F59E0B]">
+          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-dashed border-[#F59E0B] cursor-not-allowed opacity-50">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-sm font-semibold text-[#1F2937]">Diseases</h3>
               <svg className="w-4 h-4 text-[#F59E0B]" fill="currentColor" viewBox="0 0 20 20">
@@ -556,11 +731,16 @@ export function DashboardPage() {
               </svg>
             </div>
             <p className="text-xs text-[#6B7280] mb-2">Try full access to features</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <button
+              disabled={true}
+              className="text-[#14B8A6] text-xs cursor-not-allowed"
+            >
+              Learn more →
+            </button>
           </div>
 
           {/* Profitability (Premium) */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-dashed border-[#F59E0B]">
+          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-dashed border-[#F59E0B] cursor-not-allowed opacity-50">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-sm font-semibold text-[#1F2937]">Profitability</h3>
               <svg className="w-4 h-4 text-[#F59E0B]" fill="currentColor" viewBox="0 0 20 20">
@@ -568,17 +748,52 @@ export function DashboardPage() {
               </svg>
             </div>
             <p className="text-xs text-[#6B7280] mb-2">Try full access to features</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <button
+              disabled={true}
+              className="text-[#14B8A6] text-xs cursor-not-allowed"
+            >
+              Learn more →
+            </button>
           </div>
 
           {/* Crop Management Guide */}
-          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-[#10B981]">
+          <div className="bg-white rounded-lg p-4 min-w-[200px] border-2 border-[#10B981] cursor-not-allowed opacity-50">
             <h3 className="text-sm font-semibold text-[#1F2937] mb-1">Crop Management Guide</h3>
             <p className="text-xs text-[#6B7280] mb-2">Discover the ArdhiPilot crop management guide</p>
-            <button className="text-[#14B8A6] text-xs hover:text-[#0D9488]">Learn more →</button>
+            <button
+              disabled={true}
+              className="text-[#14B8A6] text-xs cursor-not-allowed"
+            >
+              Learn more →
+            </button>
           </div>
         </div>
       </div>
+
+      <CropTypeModal
+        isOpen={isCropTypeModalOpen}
+        onClose={() => setIsCropTypeModalOpen(false)}
+        onSubmit={handleCropTypeSubmit}
+        initialValue={selectedPlot?.crop_type}
+      />
+
+      <FertigationModal
+        isOpen={isFertigationModalOpen}
+        onClose={() => setIsFertigationModalOpen(false)}
+        plotId={selectedPlot?.id || ''}
+        plotName={selectedPlot?.name || ''}
+      />
+
+      <DatePickerModal
+        isOpen={isDatePickerModalOpen}
+        onClose={() => setIsDatePickerModalOpen(false)}
+        selectedDate={selectedDate}
+        onSelect={(date) => {
+          setSelectedDate(date);
+          setViewDate(date);
+          setIsDatePickerModalOpen(false);
+        }}
+      />
     </div>
   );
 }

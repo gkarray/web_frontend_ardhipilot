@@ -31,9 +31,17 @@ export const loginUser = createAsyncThunk(
     } catch (error) {
       // Extract error message from API response
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const axiosError = error as { response?: { data?: { detail?: string | Array<{ msg: string }> } } };
         const detail = axiosError.response?.data?.detail;
+
         if (detail) {
+          if (Array.isArray(detail)) {
+            // Handle validation errors (422) where detail is an array of objects
+            return rejectWithValue(
+              detail.map((err) => err.msg).join(', ')
+            );
+          }
+          // Handle standard string errors
           return rejectWithValue(detail);
         }
       }
@@ -50,9 +58,17 @@ export const registerUser = createAsyncThunk(
     } catch (error) {
       // Extract error message from API response
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const axiosError = error as { response?: { data?: { detail?: string | Array<{ msg: string }> } } };
         const detail = axiosError.response?.data?.detail;
+
         if (detail) {
+          if (Array.isArray(detail)) {
+            // Handle validation errors (422) where detail is an array of objects
+            return rejectWithValue(
+              detail.map((err) => err.msg).join(', ')
+            );
+          }
+          // Handle standard string errors
           return rejectWithValue(detail);
         }
       }
@@ -72,9 +88,17 @@ export const verifyOtpUser = createAsyncThunk(
     } catch (error) {
       // Extract error message from API response
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { detail?: string } } };
+        const axiosError = error as { response?: { data?: { detail?: string | Array<{ msg: string }> } } };
         const detail = axiosError.response?.data?.detail;
+
         if (detail) {
+          if (Array.isArray(detail)) {
+            // Handle validation errors (422) where detail is an array of objects
+            return rejectWithValue(
+              detail.map((err) => err.msg).join(', ')
+            );
+          }
+          // Handle standard string errors
           return rejectWithValue(detail);
         }
       }
